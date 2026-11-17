@@ -130,6 +130,11 @@ LTR390_Status LTR390_Read(LTR390_Dev *dev)
     st = ltr_read20(dev, LTR390_REG_ALS_DATA_0, &dev->data.als_raw);
     if (st != LTR390_OK) return st;
 
+    /* Check for ADC saturation based on configured resolution bit depth */
+    static const uint32_t max_counts[] = { 1048575, 524287, 262143, 131071, 65535 };
+    uint8_t res_idx = dev->resolution > 4 ? 2 : dev->resolution;
+    dev->data.saturated = (dev->data.als_raw >= (max_counts[res_idx] - 10));
+
     /* Lux = 0.6 × ALS_DATA / (GAIN × INT_FACTOR) × WFAC
      * WFAC = 1 (no window cover).                                          */
     gf = gain_factor[dev->als_gain];
@@ -165,6 +170,33 @@ LTR390_Status LTR390_Read(LTR390_Dev *dev)
         return LTR390_ERR_I2C;
 
     return LTR390_OK;
+}
+
+LTR390_Status LTR390_Standby(LTR390_Dev *dev)
+{
+    /* Clear enable bit in MAIN_CTRL to shut down internal oscillator (< 1 µA) */
+    if (ltr_write8(dev, LTR390_REG_MAIN_CTRL, 0x00) != HAL_OK)
+        return LTR390_ERR_I2C;
+    return LTR390_OK;
+}
+
+LTR390_Status LTR390_Wakeup(LTR390_Dev *dev)
+{
+    /* Re-enable sensor in ALS mode */
+    if (ltr_write8(dev, LTR390_REG_GAIN, dev->als_gain) != HAL_OK)
+        return LTR390_ERR_I2C;
+    if (ltr_write8(dev, LTR390_REG_MAIN_CTRL, LTR390_CTRL_EN) != HAL_OK)
+        return LTR390_ERR_I2C;
+    HAL_Delay(100);
+    return LTR390_OK;
+}
+
+LTR390_Status LTR390_SetGain(LTR390_Dev *dev, uint8_t als_gain, uint8_t uvs_gain)
+{
+    if (als_gain > 4 || uvs_gain > 4) return LTR390_ERR_I2C;
+    dev->als_gain = als_gain;
+    dev->uvs_gain = uvs_gain;
+    return ltr_write8(dev, LTR390_REG_GAIN, dev->als_gain) == HAL_OK ? LTR390_OK : LTR390_ERR_I2C;
 }
 
 const LTR390_Data *LTR390_GetData(const LTR390_Dev *dev)

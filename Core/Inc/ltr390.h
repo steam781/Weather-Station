@@ -61,19 +61,20 @@ typedef enum {
 
 /* ── Measurement Results ─────────────────────────────────────────────────── */
 typedef struct {
-    uint32_t als_raw;      /* Raw ALS ADC count      */
-    uint32_t uvs_raw;      /* Raw UVS ADC count      */
-    float    lux;          /* Calculated lux          */
-    float    uv_index;     /* Calculated UV index     */
+    uint32_t als_raw;      /* Raw ALS ADC count                               */
+    uint32_t uvs_raw;      /* Raw UVS ADC count                               */
+    float    lux;          /* Calculated lux                                  */
+    float    uv_index;     /* Calculated UV index                             */
+    bool     saturated;    /* True if ADC is clipped to full-scale            */
 } LTR390_Data;
 
 /* ── Device Handle ───────────────────────────────────────────────────────── */
 typedef struct {
     I2C_HandleTypeDef *hi2c;
-    uint8_t            addr;        /* 7-bit I2C address        */
-    uint8_t            als_gain;    /* Gain register value      */
-    uint8_t            uvs_gain;    /* Gain register value      */
-    uint8_t            resolution;  /* Resolution register value*/
+    uint8_t            addr;        /* 7-bit I2C address                      */
+    uint8_t            als_gain;    /* Gain register value                    */
+    uint8_t            uvs_gain;    /* Gain register value                    */
+    uint8_t            resolution;  /* Resolution register value              */
     LTR390_Data        data;
 } LTR390_Dev;
 
@@ -95,6 +96,30 @@ LTR390_Status LTR390_Init(LTR390_Dev *dev, I2C_HandleTypeDef *hi2c, uint8_t addr
  * @return LTR390_OK on success.
  */
 LTR390_Status LTR390_Read(LTR390_Dev *dev);
+
+/**
+ * @brief  Put LTR390 into standby mode (< 1 µA).
+ *         Used during Stop Mode in v2 Outdoor Mode.
+ * @param  dev  Device handle.
+ * @return LTR390_OK on success.
+ */
+LTR390_Status LTR390_Standby(LTR390_Dev *dev);
+
+/**
+ * @brief  Wake LTR390 from standby mode into active ALS operation.
+ * @param  dev  Device handle.
+ * @return LTR390_OK on success.
+ */
+LTR390_Status LTR390_Wakeup(LTR390_Dev *dev);
+
+/**
+ * @brief  Configure ALS and UVS gain settings dynamically.
+ * @param  dev       Device handle.
+ * @param  als_gain  ALS gain: 0=1×, 1=3×, 2=6×, 3=9×, 4=18×.
+ * @param  uvs_gain  UVS gain: 0=1×, 1=3×, 2=6×, 3=9×, 4=18×.
+ * @return LTR390_OK on success.
+ */
+LTR390_Status LTR390_SetGain(LTR390_Dev *dev, uint8_t als_gain, uint8_t uvs_gain);
 
 /**
  * @brief  Access the most recent measurement results.
