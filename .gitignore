@@ -1,0 +1,4 @@
+# STM32CubeIDE build & local workspace metadata
+Debug/
+Release/
+.settings/
