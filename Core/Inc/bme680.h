@@ -108,19 +108,23 @@ typedef struct {
 
 /* ── Measurement Results ─────────────────────────────────────────────────── */
 typedef struct {
-    float temperature;     /* °C                              */
-    float pressure;        /* hPa (mbar)                      */
-    float humidity;        /* %RH                             */
-    float gas_resistance;  /* Ω  (0 if gas reading invalid)   */
-    bool  gas_valid;       /* true if heater was stable        */
+    float       temperature;     /* °C                                        */
+    float       pressure;        /* hPa (mbar)                                */
+    float       humidity;        /* %RH                                       */
+    float       gas_resistance;  /* Ω  (0 if gas reading invalid)             */
+    bool        gas_valid;       /* true if heater was stable                  */
+    float       dew_point;       /* °C (Magnus formula)                       */
+    float       iaq_score;       /* 0–500 Indoor Air Quality index (AQI scale)*/
+    const char *iaq_text;        /* "Good", "Moderate", "Unhealthy", etc.     */
 } BME680_Data;
 
 /* ── Device Handle ───────────────────────────────────────────────────────── */
 typedef struct {
     I2C_HandleTypeDef *hi2c;
-    uint8_t            addr;       /* 7-bit I2C address              */
+    uint8_t            addr;         /* 7-bit I2C address                     */
     BME680_CalibData   calib;
     BME680_Data        data;
+    float              gas_baseline; /* Gas resistance baseline (Ω) for IAQ   */
 } BME680_Dev;
 
 /* ── Public API ──────────────────────────────────────────────────────────── */
@@ -137,12 +141,30 @@ BME680_Status BME680_Init(BME680_Dev *dev, I2C_HandleTypeDef *hi2c, uint8_t addr
 
 /**
  * @brief  Trigger a forced-mode measurement (T + P + H + Gas) and block
- *         until the data is ready or timeout.
+ *         until the data is ready or timeout. Automatically calculates
+ *         dew point and IAQ index.
  * @param  dev          Device handle.
  * @param  enable_gas   true to run the gas heater (ignored when OUTDOOR_MODE).
  * @return BME680_OK on success.
  */
 BME680_Status BME680_ReadForced(BME680_Dev *dev, bool enable_gas);
+
+/**
+ * @brief  Put BME680 into ultra-low-power sleep mode (sub-µA).
+ *         Used during Stop Mode in v2 Outdoor Mode.
+ * @param  dev  Device handle.
+ * @return BME680_OK on success.
+ */
+BME680_Status BME680_Sleep(BME680_Dev *dev);
+
+/**
+ * @brief  Calculate sea-level equivalent barometric pressure (QNH).
+ * @param  station_press_hpa  Measured barometric pressure in hPa.
+ * @param  altitude_m         Station elevation above sea level in meters.
+ * @param  temp_c             Current ambient temperature in °C.
+ * @return Sea-level pressure in hPa.
+ */
+float BME680_CalcSeaLevelPressure(float station_press_hpa, float altitude_m, float temp_c);
 
 /**
  * @brief  Access the most recent measurement results.

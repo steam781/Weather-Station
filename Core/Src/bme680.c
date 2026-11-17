@@ -249,10 +249,12 @@ BME680_Status BME680_ReadForced(BME680_Dev *dev, bool enable_gas)
 
     /* ── 1. Configure gas heater (set-point 0) ─────────────────────────── */
     if (enable_gas) {
-        /* Use 25 °C as a rough ambient estimate for heater calc (the actual
-         * compensated temperature from the previous cycle would be better,
-         * but 25 °C gives a < 2 % error on the heater target). */
-        uint8_t rh = calc_res_heat(cal, BME680_GAS_TEMP, 2500);
+        /* Use actual ambient temperature if valid, otherwise fallback to 25 °C */
+        int16_t amb_temp_x100 = 2500;
+        if (dev->data.temperature >= -40.0f && dev->data.temperature <= 85.0f) {
+            amb_temp_x100 = (int16_t)(dev->data.temperature * 100.0f);
+        }
+        uint8_t rh = calc_res_heat(cal, BME680_GAS_TEMP, amb_temp_x100);
         if (bme_write8(dev, BME680_REG_RES_HEAT0, rh) != HAL_OK)
             return BME680_ERR_I2C;
 
@@ -315,7 +317,73 @@ BME680_Status BME680_ReadForced(BME680_Dev *dev, bool enable_gas)
                                ? comp_gas(cal, adc_gas, gas_range)
                                : 0.0f;
 
+    /* ── 6. Dew Point calculation (Magnus formula) ─────────────────────── */
+    float temp = dev->data.temperature;
+    float hum  = dev->data.humidity;
+    if (hum > 0.0f) {
+        float alpha = ((17.27f * temp) / (237.7f + temp)) + logf(hum / 100.0f);
+        dev->data.dew_point = (237.7f * alpha) / (17.27f - alpha);
+    } else {
+        dev->data.dew_point = temp;
+    }
+
+    /* ── 7. Indoor Air Quality (IAQ) Index Estimation (0–500 scale) ────── */
+    if (dev->data.gas_valid && dev->data.gas_resistance > 0.0f) {
+        /* Update clean-air baseline resistance (slow upward tracking) */
+        if (dev->gas_baseline <= 0.0f) {
+            dev->gas_baseline = dev->data.gas_resistance;
+        } else if (dev->data.gas_resistance > dev->gas_baseline) {
+            dev->gas_baseline = (dev->gas_baseline * 0.9f) + (dev->data.gas_resistance * 0.1f);
+        }
+
+        /* Gas ratio contribution (75% weight) */
+        float gas_ratio = dev->data.gas_resistance / dev->gas_baseline;
+        if (gas_ratio > 1.0f) gas_ratio = 1.0f;
+        if (gas_ratio < 0.0f) gas_ratio = 0.0f;
+
+        /* Humidity deviation contribution (25% weight, target 40% RH) */
+        float hum_ratio;
+        if (hum >= 40.0f) {
+            hum_ratio = 1.0f - ((hum - 40.0f) / 60.0f);
+        } else {
+            hum_ratio = 1.0f - ((40.0f - hum) / 40.0f);
+        }
+        if (hum_ratio > 1.0f) hum_ratio = 1.0f;
+        if (hum_ratio < 0.0f) hum_ratio = 0.0f;
+
+        /* Combined clean air fraction: 1.0 = best, 0.0 = worst */
+        float clean_fraction = (0.75f * gas_ratio) + (0.25f * hum_ratio);
+
+        /* Map to 0–500 standard EPA AQI scale */
+        dev->data.iaq_score = (1.0f - clean_fraction) * 500.0f;
+
+        if (dev->data.iaq_score <= 50.0f)       dev->data.iaq_text = "Good";
+        else if (dev->data.iaq_score <= 100.0f) dev->data.iaq_text = "Moderate";
+        else if (dev->data.iaq_score <= 150.0f) dev->data.iaq_text = "Sensitive";
+        else if (dev->data.iaq_score <= 200.0f) dev->data.iaq_text = "Unhealthy";
+        else if (dev->data.iaq_score <= 300.0f) dev->data.iaq_text = "Very Unhealthy";
+        else                                    dev->data.iaq_text = "Hazardous";
+    } else {
+        dev->data.iaq_score = 0.0f;
+        dev->data.iaq_text  = "N/A";
+    }
+
     return BME680_OK;
+}
+
+BME680_Status BME680_Sleep(BME680_Dev *dev)
+{
+    /* Write 0x00 to ctrl_meas to put sensor into sleep mode */
+    if (bme_write8(dev, BME680_REG_CTRL_MEAS, BME680_MODE_SLEEP) != HAL_OK)
+        return BME680_ERR_I2C;
+    return BME680_OK;
+}
+
+float BME680_CalcSeaLevelPressure(float station_press_hpa, float altitude_m, float temp_c)
+{
+    /* Hypsometric equation for sea-level pressure (QNH) */
+    float temp_k = temp_c + 273.15f;
+    return station_press_hpa * powf(1.0f - (0.0065f * altitude_m) / (temp_k + 0.0065f * altitude_m), -5.257f);
 }
 
 const BME680_Data *BME680_GetData(const BME680_Dev *dev)
