@@ -85,14 +85,14 @@ DSTATUS USER_initialize (
 )
 {
   /* USER CODE BEGIN INIT */
-    if (pdrv != 0) return STA_NOINIT;
+	if (pdrv != 0) return STA_NOINIT;
 
-    if (SD_Init(&sd_card, &hspi1) == SD_OK) {
-        Stat &= ~STA_NOINIT;
-        return Stat;
-    }
-    Stat = STA_NOINIT;
-    return Stat;
+	if (SD_IsInitialized(&sd_card) || SD_Init(&sd_card, &hspi1) == SD_OK) {
+		Stat &= ~STA_NOINIT;
+		return Stat;
+	}
+	Stat = STA_NOINIT;
+	return Stat;
   /* USER CODE END INIT */
 }
 

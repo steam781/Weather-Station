@@ -61,6 +61,7 @@ static uint8_t sd_spi_xfer(const SD_Dev *dev, uint8_t byte)
 
 static void sd_set_speed(const SD_Dev *dev, uint32_t prescaler)
 {
+	while (__HAL_SPI_GET_FLAG(dev->hspi, SPI_FLAG_BSY)) {}
     __HAL_SPI_DISABLE(dev->hspi);
     MODIFY_REG(dev->hspi->Instance->CR1, SPI_CR1_BR_Msk, prescaler);
     __HAL_SPI_ENABLE(dev->hspi);
@@ -142,6 +143,7 @@ SD_Status SD_Init(SD_Dev *dev, SPI_HandleTypeDef *hspi)
     sd_cs_high(dev);
 
     if (r1 != 0x01) {
+    	sd_set_speed(dev, SPI_BAUDRATEPRESCALER_16);
         return SD_ERR_NOT_READY;
     }
 
@@ -169,7 +171,10 @@ SD_Status SD_Init(SD_Dev *dev, SPI_HandleTypeDef *hspi)
             HAL_Delay(10);
         } while ((HAL_GetTick() - t0) < 1000);
 
-        if (r1 != 0x00) return SD_ERR_TIMEOUT;
+        if (r1 != 0x00) {
+        	sd_set_speed(dev, SPI_BAUDRATEPRESCALER_16);
+        	return SD_ERR_TIMEOUT;
+        }
 
         /* Send CMD58 (READ_OCR) to check CCS (Card Capacity Status bit 30) */
         sd_cs_low();
@@ -208,7 +213,10 @@ SD_Status SD_Init(SD_Dev *dev, SPI_HandleTypeDef *hspi)
             } while ((HAL_GetTick() - t0) < 1000);
         }
 
-        if (r1 != 0x00) return SD_ERR_TIMEOUT;
+        if (r1 != 0x00) {
+        	sd_set_speed(dev, SPI_BAUDRATEPRESCALER_16);
+        	return SD_ERR_TIMEOUT;
+        }
 
         /* Force 512-byte block length for byte-addressed cards */
         sd_cs_low();
