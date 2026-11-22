@@ -1,4 +1,10 @@
-# STM32CubeIDE build & local workspace metadata
+# STM32CubeIDE / Eclipse build outputs & workspace metadata
 Debug/
 Release/
+.metadata/
 .settings/
+*.launch
+
+# OS & editor files
+.DS_Store
+Thumbs.db
