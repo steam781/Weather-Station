@@ -1,36 +1,80 @@
-# Weather Station Firmware (STM32G431KB)
+# STM32G431KB Portable Weather Station (`v1.0.0`)
 
-Embedded C firmware for a modular environmental monitoring station built on the **STMicroelectronics NUCLEO-G431KB** (ARM Cortex-M4 @ 170 MHz). The current codebase implements the complete bare-metal HAL driver layer for environmental/optical sensing, local SPI display rendering, and FatFS MicroSD CSV logging, structured with a build-time `OUTDOOR_MODE` switch for transitioning from an indoor desk station (v1) to a weather-sealed outdoor unit (v2).
+Embedded environmental monitoring station built on the **STMicroelectronics NUCLEO-G431KB** running at **170 MHz**. Reads temperature, humidity, barometric pressure, VOC gas resistance / IAQ, ambient light (Lux), and UV index over `I2C2`, renders a real-time 320×240 dashboard on an **ILI9341 TFT** over `SPI1` with automatic PWM backlight dimming, and streams formatted telemetry over USB UART at **115200 baud**.
 
-## Implemented Drivers
+---
 
-* **Bosch BME680 (`Core/Inc/bme680.h`, `Core/Src/bme680.c`)**
-  * I2C forced-mode driver reading temperature, barometric pressure, relative humidity, and calculated dew point.
-  * Supports integrated gas heater control and Indoor Air Quality (IAQ) / VOC resistance scoring when `OUTDOOR_MODE` is set to `0`, with clean heater bypass when `OUTDOOR_MODE` is set to `1`.
-* **Lite-On LTR-390UV-01 (`Core/Inc/ltr390.h`, `Core/Src/ltr390.c`)**
-  * Dual-mode I2C driver switching between Ambient Light Sensing (ALS in lux) and Ultraviolet Sensing (UVS / UV index).
-  * Drives automatic PWM display backlight scaling and night-mode button illumination thresholds.
-* **ILI9341 2.8" TFT Display (`Core/Inc/ili9341.h`, `Core/Src/ili9341.c`)**
-  * SPI1 driver supporting hardware/software reset, portrait and landscape orientation (`MADCTL`), RGB565 drawing primitives, and a built-in 5×7 ASCII font renderer.
-  * Integrates `TIM2_CH1` PWM brightness control and enforces strict Chip Select (`TFT_CS`) release after every transaction for shared-bus safety.
-* **MicroSD SPI & FatFS CSV Logger (`Core/Inc/sd_spi.h`, `Core/Src/sd_spi.c`, `Core/Inc/sd_logger.h`, `Core/Src/sd_logger.c`)**
-  * Low-level SPI block driver supporting SDv1, SDv2 (SDSC/SDHC/SDXC), and MMC cards with automatic clock-speed stepping (slow init clock scaling up to ~10.6 Mbit/s) and dummy-clock MISO release.
-  * Bridged to FatFS via `FATFS/Target/user_diskio.c` to automatically create and append timestamped telemetry rows to `WEATHER.CSV`.
+## Hardware Bill of Materials
 
-## Pinout & Peripheral Mapping
+| Component | Interface | Address / Notes |
+| :--- | :--- | :--- |
+| **NUCLEO-G431KB** (`STM32G431KBT6`) | MCU (`170 MHz`) | Powered via ST-LINK Micro-USB (`3.3V` logic) |
+| **Bosch BME680** Breakout | `I2C2` (`400 kHz`) | `0x77` — Temp, Humidity, Pressure, Gas/IAQ |
+| **Lite-On LTR-390UV-01** Breakout | `I2C2` (`400 kHz`) | `0x53` — Ambient Light (Lux) & UV Index |
+| **2.8" ILI9341 SPI TFT** (`320 × 240`) | `SPI1` (`10.625 MHz`) | Includes `TIM2_CH1` PWM backlight dimming |
+| **MicroSD Card Module** *(v1.1)* | `SPI1` (shared) | Disabled in `v1.0.0` (`ENABLE_SD_LOGGING 0`) |
+| **4× Tactile Push Buttons + LED** *(v1.1)* | `EXTI` + `GPIO` | Internal pull-ups enabled; active-low to `GND` |
 
-| Peripheral | Pins | Connected Hardware | Notes |
+---
+
+## Pinout & Wiring (`NUCLEO-G431KB` Top View — USB at Top)
+
+### Power Rails
+* **`CN3 Pin 14` (`+3V3`)** → Breadboard `+` (`3.3V`) rail *(powers TFT `VCC` & `CS2`, BME680, LTR390)*
+* **`CN4 Pin 4` / `CN3 Pin 2` (`GND`)** → Breadboard `-` (`GND`) rail
+
+### `I2C2` Environmental Sensors (Qwiic)
+> **Hardware Note:** On the `NUCLEO-G431KB`, factory solder bridges `SB2` and `SB3` tie `PA5`/`PA6` (`SPI1`) to `PB7`/`PA15` (`I2C1`). To run `SPI1` and I2C concurrently without desoldering `SB2`/`SB3`, sensors are routed to **`I2C2`**.
+
+| Sensor Signal | Qwiic Wire Color | STM32 Pin | Nucleo Header Pin |
 | :--- | :--- | :--- | :--- |
-| **I2C1** | `PA15` (SCL), `PB7` (SDA) | BME680 (`0x77`), LTR390 (`0x53`) | 400 kHz Fast Mode |
-| **SPI1** | `PA5` (SCK), `PA6` (MISO), `PA7` (MOSI) | ILI9341 TFT + MicroSD | Shared bus (~10.6 Mbit/s), software CS |
-| **Display Control** | `PB0` (`TFT_CS`), `PB6` (`TFT_DC`), `PB5` (`TFT_RST`) | ILI9341 TFT | `TFT_CS` idles HIGH |
-| **TIM2_CH1** | `PA0` (`TFT_BLK`) | ILI9341 Backlight | 1 kHz PWM dimming (`0–999` duty) |
-| **Storage Control** | `PA4` (`SD_CS`) | Adafruit MicroSD Breakout | `SD_CS` idles HIGH |
-| **USART2 (BSP)** | `PA2` (TX), `PA3` (RX) | ST-LINK Virtual COM | `printf` debug output (115200 baud) |
-| **GPIO Output** | `PA11` (`BTN_LED_EN`), `PB8` (`LD2`) | ULN2003 LED Driver / Onboard LED | Night-mode button ring & heartbeat |
+| `GND` | Black | `GND` | Breadboard `-` rail |
+| `3V3` | Red | `+3V3` | Breadboard `+` rail (`CN3 Pin 14`) |
+| `SDA` | Blue | `PA8` (`I2C2_SDA`) | **`CN4 Pin 12`** (`D9`) |
+| `SCL` | Yellow | `PA9` (`I2C2_SCL`) | **`CN4 Pin 1`** (`D1`) |
 
-## Configuration & Repository Layout
+### `SPI1` 2.8" ILI9341 TFT Display
 
-* `Core/Inc/app_config.h` — Central build configuration (`OUTDOOR_MODE`, 7-bit I2C addresses, polling/logging intervals, oversampling, and lux thresholds).
-* `Core/Inc/` & `Core/Src/` — Hardware drivers (`bme680`, `ltr390`, `ili9341`, `sd_spi`, `sd_logger`) and main application loop.
-* `FATFS/Target/user_diskio.c` — FatFS disk I/O interface linking `f_mount` / `f_write` calls to `sd_spi`.
+| Display Pin | STM32 Pin | Nucleo Header Pin | Function |
+| :--- | :--- | :--- | :--- |
+| `GND` | `GND` | Breadboard `-` rail | Ground |
+| `VCC` | `+3V3` | Breadboard `+` rail | Display power (`3.3V`) |
+| `CS2` | `+3V3` | Breadboard `+` rail | XPT2046 touch CS tied inactive (`HIGH`) |
+| `CLK` (`SCK`) | `PA5` | **`CN3 Pin 8`** (`A4`) | `SPI1_SCK` (`10.625 Mbit/s`) |
+| `MISO` (`SDO`) | `PA6` | **`CN3 Pin 7`** (`A5`) | `SPI1_MISO` |
+| `MOSI` (`SDI`) | `PA7` | **`CN3 Pin 6`** (`A6`) | `SPI1_MOSI` |
+| `CS1` (`CS`) | `PB0` | **`CN4 Pin 6`** (`D3`) | `TFT_CS` (active-low) |
+| `DC` (`RS`) | `PB6` | **`CN4 Pin 9`** (`D6`) | `TFT_DC` (Data / Command) |
+| `RES` (`RST`) | `PB5` | **`CN4 Pin 14`** (`D11`) | `TFT_RST` (Hardware Reset) |
+| `BLK` (`LED`) | `PA0` | **`CN3 Pin 12`** (`A0`) | `TIM2_CH1` Backlight PWM (`1 kHz`) |
+
+---
+
+## Building & Flashing
+
+1. Open the project in **STM32CubeIDE** (`File → Open Projects from File System...`).
+2. Adjust build flags in `Core/Inc/app_config.h` if needed:
+   * `OUTDOOR_MODE` (`0` = Indoor with BME680 VOC heater enabled; `1` = Outdoor without gas heater)
+   * `ENABLE_SD_LOGGING` (`0` in `v1.0.0`; set to `1` once MicroSD hardware is attached)
+3. Build with **`Ctrl + B`** and flash via ST-LINK with **`Ctrl + F11`**.
+4. Open a serial terminal (PuTTY / Tera Term) on the **STMicroelectronics STLink Virtual COM Port** at **`115200` baud** (`8-N-1`, Flow Control: `None`).
+
+### Example Serial Boot & Telemetry Output
+```text
+========================================
+  Weather Station v1.0.0  [INDOOR]
+  STM32G431KB @ 170 MHz
+========================================
+
+I2C2 bus scan (0x01 – 0x7F):
+  [0x53] ACK ← LTR390
+  [0x77] ACK ← BME680
+  2 device(s) found.
+
+BME680: OK (chip ID 0x61)
+LTR390: OK (part ID 0xB2)
+ILI9341: OK (320 x 240)
+MicroSD: Disabled (v1.0.0)
+
+T: 22.4 C  |  P: 1012.8 hPa  |  H: 43.5 %  |  Dew: 9.4 C  |  IAQ: 28 (Good)  |  Gas: 148.2 kOhm
+Lux: 312.0  |  UV: 0.00  |  PWM: 468
