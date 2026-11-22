@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Exclude web-only simulator & CI workflows from GitHub Release source archives
+/simulator export-ignore
+/simulator/** export-ignore
+/.github export-ignore
+/.github/** export-ignore
+.gitattributes export-ignore
