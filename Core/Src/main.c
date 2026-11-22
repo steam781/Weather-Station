@@ -278,17 +278,20 @@ int main(void)
     TFT_DrawDashboardLayout();
 
     /* ── MicroSD card init (SPI1) ────────────────────────────────────────── */
-    printf("MicroSD: ");
-    SD_Status sd_st = SD_Init(&sd_card, &hspi1);
-    if (sd_st == SD_OK) {
-        uint32_t mb = (sd_card.sector_count / 2048);
-        printf("OK (Type 0x%02X, Capacity: %lu MB)\r\n", sd_card.card_type, (unsigned long)mb);
-        SD_Logger_Init();
-        printf("\r\n");
-    } else {
-        printf("FAIL (err %d - check card insertion)\r\n\r\n", sd_st);
-    }
-
+    #if ENABLE_SD_LOGGING
+        printf("MicroSD: ");
+        SD_Status sd_st = SD_Init(&sd_card, &hspi1);
+        if (sd_st == SD_OK) {
+            uint32_t mb = (sd_card.sector_count / 2048);
+            printf("OK (Type 0x%02X, Capacity: %lu MB)\r\n", sd_card.card_type, (unsigned long)mb);
+            SD_Logger_Init();
+            printf("\r\n");
+        } else {
+            printf("FAIL (err %d - check card insertion)\r\n\r\n", sd_st);
+        }
+    #else
+        printf("MicroSD: Disabled (v%s)\r\n\r\n", FW_VERSION);
+    #endif
   while (1)
   {
     /* USER CODE END WHILE */
@@ -340,6 +343,7 @@ int main(void)
             printf("\r\nLux: %.1f  |  UV: %.2f  |  PWM: %u\r\n\r\n",
                    ld->lux, ld->uv_index, pwm_duty);
 
+			#if ENABLE_SD_LOGGING
             /* 5. MicroSD CSV Logging (every SD_LOG_INTERVAL_MS) */
             static uint32_t lastSdLog = 0;
             if ((HAL_GetTick() - lastSdLog) >= SD_LOG_INTERVAL_MS) {
@@ -348,6 +352,7 @@ int main(void)
                     SD_Logger_LogWeather(HAL_GetTick() / 1000, bd, ld);
                 }
             }
+			#endif
         }
         else
         {

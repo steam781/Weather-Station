@@ -12,6 +12,7 @@
 /* 0 = v1 Indoor (USB/bench-powered, display always on, gas/IAQ enabled)     */
 /* 1 = v2 Outdoor (battery/solar, Stop Mode, gas/IAQ disabled)               */
 #define OUTDOOR_MODE         0
+#define ENABLE_SD_LOGGING    0      /* 0 = disabled for v1.0.0, 1 = enabled  */
 
 /* ── I2C Sensor Addresses (7-bit, unshifted) ─────────────────────────────── */
 #define BME680_I2C_ADDR      0x77   /* Bosch BME680 (SDO → VDD)              */
