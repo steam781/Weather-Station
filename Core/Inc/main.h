@@ -65,6 +65,8 @@ void Error_Handler(void);
 #define BTN_OK_Pin GPIO_PIN_0
 #define BTN_OK_GPIO_Port GPIOF
 #define BTN_OK_EXTI_IRQn EXTI0_IRQn
+#define ESP_EN_Pin GPIO_PIN_1
+#define ESP_EN_GPIO_Port GPIOF
 #define TFT_BLK_Pin GPIO_PIN_0
 #define TFT_BLK_GPIO_Port GPIOA
 #define BTN_UP_Pin GPIO_PIN_1
@@ -74,8 +76,6 @@ void Error_Handler(void);
 #define SD_CS_GPIO_Port GPIOA
 #define TFT_CS_Pin GPIO_PIN_0
 #define TFT_CS_GPIO_Port GPIOB
-#define ESP_EN_Pin GPIO_PIN_8
-#define ESP_EN_GPIO_Port GPIOA
 #define BTN_LED_EN_Pin GPIO_PIN_11
 #define BTN_LED_EN_GPIO_Port GPIOA
 #define BTN_BACK_Pin GPIO_PIN_12
