@@ -1,6 +1,11 @@
 # STM32G431KB Portable Weather Station (`v1.0.0`)
 
-Embedded environmental monitoring station built on the **STMicroelectronics NUCLEO-G431KB** running at **170 MHz**. Reads temperature, humidity, barometric pressure, VOC gas resistance / IAQ, ambient light (Lux), and UV index over `I2C2`, renders a real-time 320×240 dashboard on an **ILI9341 TFT** over `SPI1` with automatic PWM backlight dimming, and streams formatted telemetry over USB UART at **115200 baud**.
+[![Release](https://img.shields.io/github/v/release/steam781/Weather-Station?label=firmware)](https://github.com/steam781/Weather-Station/releases/tag/v.1.0.0)
+[![Interactive Simulator & Wiring Guide](https://img.shields.io/badge/Live_Demo-Simulator_%26_Wiring_Canvas-06b6d4)](https://steam781.github.io/Weather-Station/)
+
+Embedded environmental monitoring station built on the **STMicroelectronics NUCLEO-G431KB** (`STM32G431KBT6` running at **170 MHz**). Reads temperature, humidity, barometric pressure, dew point, VOC gas resistance / IAQ, ambient light (Lux), and UV index over `I2C2`, renders a real-time 320×240 dashboard on an **ILI9341 TFT** over `SPI1` with automatic PWM backlight dimming, and streams formatted telemetry over USB UART at **115200 baud**.
+
+> **Interactive Browser Simulator & Pinout Canvas:** Open the [**Live Simulator & Wiring Router**](https://steam781.github.io/Weather-Station/) to test sensor scenarios, emulate the ILI9341 display, and trace every jumper wire on the `NUCLEO-G431KB`.
 
 ---
 
@@ -9,36 +14,38 @@ Embedded environmental monitoring station built on the **STMicroelectronics NUCL
 | Component | Interface | Address / Notes |
 | :--- | :--- | :--- |
 | **NUCLEO-G431KB** (`STM32G431KBT6`) | MCU (`170 MHz`) | Powered via ST-LINK Micro-USB (`3.3V` logic) |
-| **Bosch BME680** Breakout | `I2C2` (`400 kHz`) | `0x77` — Temp, Humidity, Pressure, Gas/IAQ |
+| **Bosch BME680** Breakout | `I2C2` (`400 kHz`) | `0x77` — Temp, Humidity, Pressure, Dew Point, Gas/IAQ |
 | **Lite-On LTR-390UV-01** Breakout | `I2C2` (`400 kHz`) | `0x53` — Ambient Light (Lux) & UV Index |
 | **2.8" ILI9341 SPI TFT** (`320 × 240`) | `SPI1` (`10.625 MHz`) | Includes `TIM2_CH1` PWM backlight dimming |
-| **MicroSD Card Module** *(v1.1)* | `SPI1` (shared) | Disabled in `v1.0.0` (`ENABLE_SD_LOGGING 0`) |
+| **MicroSD Card Reader** *(v1.1)* | `SPI1` (shared) | Disabled in `v.1.0.0` (`ENABLE_SD_LOGGING 0`) |
 | **4× Tactile Push Buttons + LED** *(v1.1)* | `EXTI` + `GPIO` | Internal pull-ups enabled; active-low to `GND` |
 
 ---
 
 ## Pinout & Wiring (`NUCLEO-G431KB` Top View — USB at Top)
 
-### Power Rails
-* **`CN3 Pin 14` (`+3V3`)** → Breadboard `+` (`3.3V`) rail *(powers TFT `VCC` & `CS2`, BME680, LTR390)*
-* **`CN4 Pin 4` / `CN3 Pin 2` (`GND`)** → Breadboard `-` (`GND`) rail
+Seat the **NUCLEO-G431KB** into the breadboard with the **Micro-USB port at the TOP** and the **STM32 chip facing UP** (`CN4` on the left, `CN3` on the right).
 
-### `I2C2` Environmental Sensors (Qwiic)
-> **Hardware Note:** On the `NUCLEO-G431KB`, factory solder bridges `SB2` and `SB3` tie `PA5`/`PA6` (`SPI1`) to `PB7`/`PA15` (`I2C1`). To run `SPI1` and I2C concurrently without desoldering `SB2`/`SB3`, sensors are routed to **`I2C2`**.
+### 1. Power Rails
+* **`CN3 Pin 14` (`+3V3`, 2nd from bottom-right)** → Breadboard `+` (`3.3V`) rail
+* **`CN4 Pin 4` (`GND`, 4th from top-left)** → Breadboard `-` (`GND`) rail
 
-| Sensor Signal | Qwiic Wire Color | STM32 Pin | Nucleo Header Pin |
+### 2. `I2C2` Environmental Sensors (Qwiic)
+> **Why `I2C2`?** On the `NUCLEO-G431KB`, factory solder bridges `SB2` and `SB3` tie `PA5`/`PA6` (`SPI1`) to `PB7`/`PA15` (`I2C1`). Routing sensors to **`I2C2`** (`PA9` / `PA8`) prevents SPI/I2C bus collisions without modifying PCB solder bridges.
+
+| Sensor Signal | Qwiic Color | STM32 Pin | Nucleo Header Pin |
 | :--- | :--- | :--- | :--- |
 | `GND` | Black | `GND` | Breadboard `-` rail |
 | `3V3` | Red | `+3V3` | Breadboard `+` rail (`CN3 Pin 14`) |
-| `SDA` | Blue | `PA8` (`I2C2_SDA`) | **`CN4 Pin 12`** (`D9`) |
-| `SCL` | Yellow | `PA9` (`I2C2_SCL`) | **`CN4 Pin 1`** (`D1`) |
+| `SDA` | Blue | `PA8` (`I2C2_SDA`) | **`CN4 Pin 12`** (`D9`, 4th from bottom-left) |
+| `SCL` | Yellow | `PA9` (`I2C2_SCL`) | **`CN4 Pin 1`** (`D1`, top-left pin) |
 
-### `SPI1` 2.8" ILI9341 TFT Display
+### 3. `SPI1` 2.8" ILI9341 TFT Display
 
 | Display Pin | STM32 Pin | Nucleo Header Pin | Function |
 | :--- | :--- | :--- | :--- |
 | `GND` | `GND` | Breadboard `-` rail | Ground |
-| `VCC` | `+3V3` | Breadboard `+` rail | Display power (`3.3V`) |
+| `VCC` | `+3V3` | Breadboard `+` rail | Display supply (`3.3V`) |
 | `CS2` | `+3V3` | Breadboard `+` rail | XPT2046 touch CS tied inactive (`HIGH`) |
 | `CLK` (`SCK`) | `PA5` | **`CN3 Pin 8`** (`A4`) | `SPI1_SCK` (`10.625 Mbit/s`) |
 | `MISO` (`SDO`) | `PA6` | **`CN3 Pin 7`** (`A5`) | `SPI1_MISO` |
@@ -50,31 +57,27 @@ Embedded environmental monitoring station built on the **STMicroelectronics NUCL
 
 ---
 
-## Building & Flashing
+## Flashing or Building Firmware
 
-1. Open the project in **STM32CubeIDE** (`File → Open Projects from File System...`).
-2. Adjust build flags in `Core/Inc/app_config.h` if needed:
-   * `OUTDOOR_MODE` (`0` = Indoor with BME680 VOC heater enabled; `1` = Outdoor without gas heater)
-   * `ENABLE_SD_LOGGING` (`0` in `v1.0.0`; set to `1` once MicroSD hardware is attached)
-3. Build with **`Ctrl + B`** and flash via ST-LINK with **`Ctrl + F11`**.
-4. Open a serial terminal (PuTTY / Tera Term) on the **STMicroelectronics STLink Virtual COM Port** at **`115200` baud** (`8-N-1`, Flow Control: `None`).
+### Option A: Flash Prebuilt Binaries (`v.1.0.0`)
+1. Download `Weather-Station.bin`, `Weather-Station.hex`, or `Weather-Station.elf` from [**Releases (`v.1.0.0`)**](https://github.com/steam781/Weather-Station/releases/tag/v.1.0.0).
+2. Connect the **NUCLEO-G431KB** via Micro-USB and flash using **STM32CubeProgrammer** (flash `.bin` to `0x08000000`, or load `.hex`/`.elf` directly).
+3. Open a serial terminal at **`115200` baud** (`8-N-1`, Flow Control: `None`).
 
-### Example Serial Boot & Telemetry Output
-```text
-========================================
-  Weather Station v1.0.0  [INDOOR]
-  STM32G431KB @ 170 MHz
-========================================
+### Option B: Build From Source (STM32CubeIDE)
+1. Open the repository folder in **STM32CubeIDE** (`File → Open Projects from File System...`).
+2. Configure build flags in `Core/Inc/app_config.h`:
+   * `OUTDOOR_MODE` (`0` = Indoor with BME680 VOC heater enabled; `1` = Outdoor with gas heater bypassed)
+   * `ENABLE_SD_LOGGING` (`0` in `v.1.0.0`; set to `1` once MicroSD hardware is connected)
+3. Build (`Ctrl + B`) and run (`Ctrl + F11`).
 
-I2C2 bus scan (0x01 – 0x7F):
-  [0x53] ACK ← LTR390
-  [0x77] ACK ← BME680
-  2 device(s) found.
+---
 
-BME680: OK (chip ID 0x61)
-LTR390: OK (part ID 0xB2)
-ILI9341: OK (320 x 240)
-MicroSD: Disabled (v1.0.0)
+## Web Simulator & Interactive Wiring Canvas (`simulator/`)
 
-T: 22.4 C  |  P: 1012.8 hPa  |  H: 43.5 %  |  Dew: 9.4 C  |  IAQ: 28 (Good)  |  Gas: 148.2 kOhm
-Lux: 312.0  |  UV: 0.00  |  PWM: 468
+The `simulator/` folder contains a React + TypeScript + Vite web application replicating the firmware's BME680/LTR390 physics, ILI9341 5×7 font renderer, `USART2` serial console, and an interactive `NUCLEO-G431KB` pin-routing diagram.
+
+```bash
+cd simulator
+npm install
+npm run dev
